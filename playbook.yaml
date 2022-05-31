@@ -1,0 +1,90 @@
+---
+- hosts: nexus
+  remote_user: ec2-user
+  become: true
+
+  tasks:
+  - name: Update Server
+    yum:
+      update_cache: yes
+  
+  - name: Install wget
+    yum:
+      name: wget
+      state: present
+  
+  - name: Install OpenJDK 1.8
+    yum:
+      name: java-1.8.0-openjdk.x86_64
+      state: present
+  
+  - name: Creates directory
+    file:
+      path: /app
+      state: directory
+
+  - name: download sources
+    get_url: url=https://download.sonatype.com/nexus/3/latest-unix.tar.gz dest=/app/nexus.tar.gz 
+
+  - name: Extract nexus.tar.gz into /app
+    unarchive:
+      copy: no
+      src: /app/nexus.tar.gz 
+      dest: /app
+
+  - name: Check if the folder exists
+    stat:
+      path: /app/nexus
+    register: dest_folder
+
+  - name: Rename dir
+    shell: mv /app/nexus-3* /app/nexus
+    when: not dest_folder.stat.exists
+
+  - name: Add the user 'nexus'
+    user:
+      name: nexus
+
+  - name: recursively update /app/nexus directory owner
+    file:
+      path: "{{ item }}"
+      state: directory
+      recurse: yes
+      owner: nexus
+    with_items: 
+    - /app/nexus
+    - /app/sonatype-work
+
+  - name: Overwrite nexus.rc file
+    copy:
+      content: 'run_as_user="nexus"'
+      dest: /app/nexus/bin/nexus.rc
+
+  - name: create file nexus.service
+    copy:
+      dest: "/etc/systemd/system/nexus.service"
+      content: |
+        [Unit]
+        Description=nexus service
+        After=network.target
+
+        [Service]
+        Type=forking
+        LimitNOFILE=65536
+        User=nexus
+        Group=nexus
+        ExecStart=/app/nexus/bin/nexus start
+        ExecStop=/app/nexus/bin/nexus stop
+        User=nexus
+        Restart=on-abort
+
+        [Install]
+        WantedBy=multi-user.target
+  
+  - name: Add nexus service to boot
+    command: chkconfig nexus on
+  
+  - name: Start service nexus, if not started
+    service:
+      name: nexus
+      state: started
