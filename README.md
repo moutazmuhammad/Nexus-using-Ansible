@@ -1,1 +1,5 @@
-# ansible_latest_sonatype_nexus3
+# npm publisher
+
+```
+https://blog.sonatype.com/custom-node-module-management-using-private-npm-registry-configured-in-nexus-repository
+```
